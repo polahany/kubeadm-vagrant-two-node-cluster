@@ -1,0 +1,27 @@
+# Vagrant local state (contains machine metadata and SSH material)
+.vagrant/
+*.box
+
+# Kubernetes credentials and local configuration
+admin.conf
+kubeconfig
+*.kubeconfig
+
+# Private keys and secrets
+*.key
+*.pem
+id_rsa
+id_rsa.*
+.env
+.env.*
+
+# Local diagnostics and generated files
+*.log
+control-plane-*.png
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
