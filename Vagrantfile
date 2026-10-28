@@ -17,6 +17,19 @@ Vagrant.configure("2") do |config|
       source: "nginx-test.yaml",
       destination: "/home/vagrant/nginx-test.yaml"
 
+    # Force Flannel to use the unique host-only NIC instead of duplicate NAT IPs.
+    control.vm.provision "file",
+      source: "flannel-interface-patch.yaml",
+      destination: "/home/vagrant/flannel-interface-patch.yaml"
+
+    # Keep the instructor's smoke test ready to run from the control plane.
+    control.vm.provision "file",
+      source: "cluster-smoke-test.sh",
+      destination: "/home/vagrant/cluster-smoke-test.sh"
+
+    control.vm.provision "shell",
+      inline: "chmod 0755 /home/vagrant/cluster-smoke-test.sh"
+
     # Private, non-public network shared by the host and both VMs.
     control.vm.network "private_network", ip: "192.168.56.10"
 

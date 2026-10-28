@@ -65,6 +65,12 @@ The NAT port accepted TCP connections, but SSH never produced a banner, proving 
 
 A pause/resume cycle released the timing stall once, but the failure repeated after reload. A lab that requires a manual recovery on every boot is not reproducible, so the image was changed to `bento/ubuntu-22.04`, an LTS release compatible with kubeadm. Three vCPUs were retained because exactly two vCPUs also triggered a known VirtualBox/Hyper-V timing path on the workstation.
 
+Ubuntu 22.04 later encountered the same initramfs timing race once on the
+control-plane VM. Three rapid pause/resume cycles released it without changing
+the virtual disk. The guest clock was then resynchronized with
+`systemd-timesyncd`. This workaround preserves WSL2 and Docker Desktop, which
+would otherwise be disrupted by disabling the Windows hypervisor.
+
 The replacement nodes successfully completed:
 
 - Initial boot.
@@ -178,6 +184,12 @@ After the download completed:
 
 The verification timeout was increased to 600 seconds for this network environment. When the worker joined, a second Flannel Pod was scheduled there successfully.
 
+Both VirtualBox NAT interfaces appear inside their separate NAT networks as
+`10.0.2.15`. Flannel initially selected this duplicated `eth0` address, which
+prevented worker Pods from reaching CoreDNS on the control plane. A declarative
+DaemonSet patch adds `--iface=eth1`, forcing Flannel to use the unique
+`192.168.56.10/11` host-only addresses for VXLAN traffic.
+
 ## 11. Worker join
 
 A fresh bootstrap command was generated on the control plane:
@@ -207,6 +219,11 @@ The final state proved all major control paths:
 - Pod addresses `10.244.1.2` and `10.244.1.3` came from the worker's Flannel subnet.
 - The NodePort Service mapped port `30080` to container port `80`.
 - An HTTP request to `192.168.56.11:30080` returned the Nginx response.
+
+The instructor-provided `cluster-smoke-test.sh` is also copied by Vagrant to
+the control-plane node and marked executable. It performs broader checks in an
+isolated temporary namespace without changing existing workloads or node
+configuration.
 
 ## 13. Verified final state
 

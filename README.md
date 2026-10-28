@@ -40,6 +40,8 @@ VirtualBox also gives each VM a NAT interface for internet access. Both NAT inte
 ```text
 .
 |- Vagrantfile
+|- cluster-smoke-test.sh
+|- flannel-interface-patch.yaml
 |- nginx-test.yaml
 |- README.md
 |- IMPLEMENTATION_REPORT.md
@@ -236,6 +238,10 @@ sudo install -o "$(id -u)" -g "$(id -g)" -m 0600 \
 kubectl apply -f \
   https://github.com/flannel-io/flannel/releases/download/v0.28.9/kube-flannel.yml
 
+kubectl patch daemonset kube-flannel-ds \
+  -n kube-flannel \
+  --patch-file /home/vagrant/flannel-interface-patch.yaml
+
 kubectl rollout status daemonset/kube-flannel-ds \
   -n kube-flannel --timeout=600s
 
@@ -243,7 +249,11 @@ kubectl rollout status deployment/coredns \
   -n kube-system --timeout=600s
 ```
 
-Flannel assigns a Pod subnet to each node and carries cross-node Pod traffic over VXLAN.
+Flannel assigns a Pod subnet to each node and carries cross-node Pod traffic over
+VXLAN. The patch makes Flannel use `eth1`, whose addresses are
+`192.168.56.10` and `192.168.56.11`. Without it, Flannel selects the NAT
+adapter `eth0`; both VMs see that adapter as `10.0.2.15`, which breaks
+cross-node Pod traffic and DNS from worker Pods.
 
 ### 8. Join the worker
 
@@ -346,6 +356,31 @@ curl -I http://192.168.56.11:30080
 
 The response should be `HTTP/1.1 200 OK`, and both application Pods should be scheduled on the worker.
 
+### 11. Run the instructor smoke test
+
+Vagrant copies `cluster-smoke-test.sh` to the control-plane VM as
+`/home/vagrant/cluster-smoke-test.sh` and marks it executable. The script uses
+the control plane's existing administrator kubeconfig and creates an isolated,
+temporary namespace for its test resources.
+
+From the control-plane VM, run the standard test:
+
+```bash
+./cluster-smoke-test.sh
+```
+
+To include NodePort connectivity from the control-plane node to the worker:
+
+```bash
+./cluster-smoke-test.sh --nodeport
+```
+
+The script checks API readiness, node health, scheduling, image pulls, DNS,
+Pod-to-Pod networking, ClusterIP Services, Deployment recovery, and optional
+NodePort access. It deletes its temporary namespace automatically. Use
+`--keep` only when the instructor needs the test resources retained for
+debugging.
+
 ## Component responsibilities
 
 | Component | Responsibility |
@@ -380,6 +415,32 @@ Verify `/etc/default/kubelet` contains the correct `--node-ip` value, then resta
 ### Vagrant VM boot is slow
 
 VirtualBox can be slower when it uses the Windows Hyper-V backend. This project uses Ubuntu 22.04 and three vCPUs per VM because the tested Bento Ubuntu 24.04 image repeatedly froze during initramfs startup on this host.
+
+If the control-plane console stops at `Begin: Loading essential drivers ...`
+and `vagrant ssh control-plane` never shows a prompt, run three quick
+pause/resume cycles from PowerShell:
+
+```powershell
+$vbox = "$env:ProgramFiles\Oracle\VirtualBox\VBoxManage.exe"
+1..3 | ForEach-Object {
+  & $vbox controlvm k8s-control-plane pause
+  Start-Sleep -Milliseconds 250
+  & $vbox controlvm k8s-control-plane resume
+  Start-Sleep -Milliseconds 250
+}
+```
+
+After SSH becomes available, resynchronize the guest clock because pausing can
+leave it behind the host:
+
+```bash
+sudo timedatectl set-ntp true
+sudo systemctl restart systemd-timesyncd
+timedatectl show -p NTPSynchronized
+```
+
+This is a VirtualBox/Hyper-V boot timing workaround; it does not reset or
+recreate the Kubernetes cluster.
 
 ## Limitations
 
