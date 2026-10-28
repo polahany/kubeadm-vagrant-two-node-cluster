@@ -40,6 +40,7 @@ VirtualBox also gives each VM a NAT interface for internet access. Both NAT inte
 ```text
 .
 |- Vagrantfile
+|- nginx-test.yaml
 |- README.md
 |- IMPLEMENTATION_REPORT.md
 `- .gitignore
@@ -280,10 +281,63 @@ kubectl get pods -A -o wide
 
 ### 10. Deploy the end-to-end test
 
+The repository includes the following declarative manifest as `nginx-test.yaml`.
+The Vagrant file provisioner copies it to
+`/home/vagrant/nginx-test.yaml` on the control-plane VM when that VM is
+created or provisioned.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-test
+  labels:
+    app: nginx-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-test
+  template:
+    metadata:
+      labels:
+        app: nginx-test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-test
+spec:
+  type: NodePort
+  selector:
+    app: nginx-test
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+      nodePort: 30080
+```
+
+The Deployment declares two identical nginx Pods. The Service selects those
+Pods by the `app: nginx-test` label and exposes them through port `30080` on
+each node. Apply and verify the saved manifest from the control plane:
+
 ```bash
-kubectl create deployment nginx-test --image=nginx:alpine --replicas=2
-kubectl create service nodeport nginx-test \
-  --tcp=80:80 --node-port=30080
+kubectl apply -f /home/vagrant/nginx-test.yaml
 kubectl rollout status deployment/nginx-test --timeout=180s
 kubectl get pods -o wide
 kubectl get services

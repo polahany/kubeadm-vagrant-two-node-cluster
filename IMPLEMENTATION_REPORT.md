@@ -194,7 +194,11 @@ The optional `worker` role label was added for clearer output. Kubernetes does n
 
 ## 12. End-to-end workload test
 
-A Deployment with two Nginx replicas was created and exposed using NodePort `30080`.
+A Deployment with two Nginx replicas and a NodePort Service on `30080` were
+defined declaratively in `nginx-test.yaml`. Vagrant copies this manifest to
+`/home/vagrant/nginx-test.yaml` on the control-plane VM, where it is applied
+with `kubectl apply`. Keeping the workload in YAML makes the test repeatable,
+reviewable, and idempotent instead of depending on imperative creation commands.
 
 The final state proved all major control paths:
 

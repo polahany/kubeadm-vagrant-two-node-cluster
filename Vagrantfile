@@ -12,6 +12,11 @@ Vagrant.configure("2") do |config|
   config.vm.define "control-plane", primary: true do |control|
     control.vm.hostname = "k8s-control-plane"
 
+    # Copy the declarative test workload into the control-plane user's home.
+    control.vm.provision "file",
+      source: "nginx-test.yaml",
+      destination: "/home/vagrant/nginx-test.yaml"
+
     # Private, non-public network shared by the host and both VMs.
     control.vm.network "private_network", ip: "192.168.56.10"
 
